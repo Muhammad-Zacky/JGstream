@@ -1,42 +1,36 @@
 <?php
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\View;
 
 define('LARAVEL_START', microtime(true));
 
-// 1. Register Autoloader
+// 1. Autoload
 require __DIR__.'/../vendor/autoload.php';
 
-// 2. Persiapkan Folder di /tmp (KHUSUS VERCEL)
+// 2. Lingkungan Vercel - Folder writable
 if (isset($_ENV['APP_ENV']) && $_ENV['APP_ENV'] === 'production') {
-    $tmpDir = '/tmp/laravel';
-    $dirs = [
-        $tmpDir . '/bootstrap/cache',
-        $tmpDir . '/storage/framework/views',
-        $tmpDir . '/storage/framework/sessions',
-        $tmpDir . '/storage/framework/cache',
-    ];
-
-    foreach ($dirs as $dir) {
-        if (!is_dir($dir)) {
-            mkdir($dir, 0777, true);
-        }
+    $tmp = '/tmp/laravel';
+    foreach (['/storage/framework/views', '/storage/framework/cache', '/bootstrap/cache'] as $path) {
+        if (!is_dir($tmp . $path)) mkdir($tmp . $path, 0777, true);
     }
-
-    // PAKSA Laravel menulis file penemuan paket (discovery) ke /tmp
-    putenv("APP_PACKAGES_CACHE={$tmpDir}/bootstrap/cache/packages.php");
-    putenv("APP_SERVICES_CACHE={$tmpDir}/bootstrap/cache/services.php");
-    putenv("APP_CONFIG_CACHE={$tmpDir}/bootstrap/cache/config.php");
-    putenv("APP_ROUTES_CACHE={$tmpDir}/bootstrap/cache/routes.php");
+    putenv("APP_CONFIG_CACHE={$tmp}/bootstrap/cache/config.php");
+    putenv("APP_PACKAGES_CACHE={$tmp}/bootstrap/cache/packages.php");
 }
 
-// 3. Bootstrap Laravel
+// 3. Bootstrap
 $app = require_once __DIR__.'/../bootstrap/app.php';
 
-// 4. Set Path Storage ke /tmp
+// 4. Emergency Fix: Jika 'view' masih hilang, kita paksa register di sini
+$app->booting(function() use ($app) {
+    if (!$app->bound('view')) {
+        $app->register(Illuminate\View\ViewServiceProvider::class);
+    }
+});
+
 if (isset($_ENV['APP_ENV']) && $_ENV['APP_ENV'] === 'production') {
     $app->useStoragePath('/tmp/laravel/storage');
 }
 
-// 5. Jalankan Aplikasi
+// 5. Run
 $app->handleRequest(Request::capture());
